@@ -36,7 +36,7 @@
 #include "freertos/task.h"
 
 // The core that the MicroPython task(s) are pinned to
-#define MP_TASK_COREID (1)
+#define MP_TASK_COREID (0)
 
 extern TaskHandle_t mp_main_task_handle;
 

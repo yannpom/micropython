@@ -299,7 +299,7 @@ endif
 # List of MicroPython source and object files
 
 SRC_C = \
-	main.c \
+	esp32task.c \
 	uart.c \
 	gccollect.c \
 	mphalport.c \
@@ -361,7 +361,7 @@ OBJ_MP += $(addprefix $(BUILD)/, $(LIB_SRC_C:.c=.o))
 OBJ_MP += $(addprefix $(BUILD)/, $(DRIVERS_SRC_C:.c=.o))
 
 # List of sources for qstr extraction
-SRC_QSTR += $(SRC_C) $(EXTMOD_SRC_C) $(LIB_SRC_C) $(DRIVERS_SRC_C)
+SRC_QSTR += main.c $(SRC_C) $(EXTMOD_SRC_C) $(LIB_SRC_C) $(DRIVERS_SRC_C)
 # Append any auto-generated sources that are needed by sources listed in SRC_QSTR
 SRC_QSTR_AUTO_DEPS +=
 
@@ -699,6 +699,7 @@ erase:
 # Declarations to build the application
 
 OBJ = $(OBJ_MP)
+OBJ_APP = $(addprefix $(BUILD)/, main.o) $(OBJ)
 
 APP_LD_ARGS =
 APP_LD_ARGS += $(LDFLAGS_MOD)
@@ -715,9 +716,20 @@ else
 APP_LD_ARGS += $(ESPCOMP)/esp32/libhal.a
 APP_LD_ARGS += -L$(ESPCOMP)/esp32/lib -lcore -lmesh -lnet80211 -lphy -lrtc -lpp -lwpa -lsmartconfig -lcoexist -lwps -lwpa2
 endif
-APP_LD_ARGS += $(OBJ)
+APP_LD_ARGS += $(OBJ_APP)
 APP_LD_ARGS += $(LIB)
 APP_LD_ARGS += --end-group
+
+
+$(BUILD)/libupythonesp32.a: $(OBJ_ESPIDF)
+	ar rcs $@ $(OBJ_ESPIDF)
+	ranlib $@
+
+$(BUILD)/libupython.a: $(OBJ_MP)
+	ar rcs $@ $(OBJ_MP)
+	ranlib $@
+
+libs: $(BUILD)/libupython.a $(BUILD)/libupythonesp32.a
 
 $(BUILD)/esp32_out.ld: $(SDKCONFIG_H)
 	$(Q)$(CC) -I$(BUILD) -C -P -x c -E $(ESPCOMP)/esp32/ld/esp32.ld -o $@
@@ -726,7 +738,7 @@ $(BUILD)/application.bin: $(BUILD)/application.elf
 	$(ECHO) "Create $@"
 	$(Q)$(ESPTOOL) --chip esp32 elf2image --flash_mode $(FLASH_MODE) --flash_freq $(FLASH_FREQ) --flash_size $(FLASH_SIZE) $<
 
-$(BUILD)/application.elf: $(OBJ) $(LIB) $(BUILD)/esp32_out.ld $(BUILD)/esp32.project.ld
+$(BUILD)/application.elf: $(OBJ_APP) $(LIB) $(BUILD)/esp32_out.ld $(BUILD)/esp32.project.ld libs
 	$(ECHO) "LINK $@"
 	$(Q)$(LD) $(LDFLAGS) -o $@ $(APP_LD_ARGS)
 	$(Q)$(SIZE) $@
