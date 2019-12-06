@@ -721,15 +721,16 @@ APP_LD_ARGS += $(LIB)
 APP_LD_ARGS += --end-group
 
 
-$(BUILD)/libupythonesp32.a: $(OBJ_ESPIDF)
-	ar rcs $@ $(OBJ_ESPIDF)
-	ranlib $@
+# $(BUILD)/libupythonesp32.a: $(OBJ_ESPIDF)
+# 	ar rcs $@ $(OBJ_ESPIDF)
+# 	xtensa-esp32-elf-ranlib $@
 
 $(BUILD)/libupython.a: $(OBJ_MP)
-	ar rcs $@ $(OBJ_MP)
-	ranlib $@
+	xtensa-esp32-elf-ar rcs $@ $(OBJ_MP)
+	xtensa-esp32-elf-ranlib $@
 
-libs: $(BUILD)/libupython.a $(BUILD)/libupythonesp32.a
+#libs: $(BUILD)/libupython.a $(BUILD)/libupythonesp32.a
+libs: $(BUILD)/libupython.a
 
 $(BUILD)/esp32_out.ld: $(SDKCONFIG_H)
 	$(Q)$(CC) -I$(BUILD) -C -P -x c -E $(ESPCOMP)/esp32/ld/esp32.ld -o $@

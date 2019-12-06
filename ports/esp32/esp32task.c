@@ -71,11 +71,17 @@ int vprintf_null(const char *format, va_list ap) {
 }
 
 void mp_task(void *pvParameter) {
+    ESP_LOGI("PY", "1");
     volatile uint32_t sp = (uint32_t)get_sp();
+    ESP_LOGI("PY", "2");
     #if MICROPY_PY_THREAD
     mp_thread_init(pxTaskGetStackStart(NULL), MP_TASK_STACK_LEN);
     #endif
+    ESP_LOGI("PY", "3");
     uart_init();
+
+
+    ESP_LOGI("PY", "4");
 
     // TODO: CONFIG_SPIRAM_SUPPORT is for 3.3 compatibility, remove after move to 4.0.
     #if CONFIG_ESP32_SPIRAM_SUPPORT || CONFIG_SPIRAM_SUPPORT
@@ -99,30 +105,49 @@ void mp_task(void *pvParameter) {
     #else
     // Allocate the uPy heap using malloc and get the largest available region
     size_t mp_task_heap_size = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    ESP_LOGI("PY", "5");
     void *mp_task_heap = malloc(mp_task_heap_size);
     #endif
+
+    ESP_LOGI("PY", "6");
 
 soft_reset:
     // initialise the stack pointer for the main thread
     mp_stack_set_top((void *)sp);
+    ESP_LOGI("PY", "7");
     mp_stack_set_limit(MP_TASK_STACK_SIZE - 1024);
+    ESP_LOGI("PY", "8");
     gc_init(mp_task_heap, mp_task_heap + mp_task_heap_size);
+    ESP_LOGI("PY", "9");
     mp_init();
+    ESP_LOGI("PY", "10");
     mp_obj_list_init(mp_sys_path, 0);
+    ESP_LOGI("PY", "11");
     mp_obj_list_append(mp_sys_path, MP_OBJ_NEW_QSTR(MP_QSTR_));
+    ESP_LOGI("PY", "12");
     mp_obj_list_append(mp_sys_path, MP_OBJ_NEW_QSTR(MP_QSTR__slash_lib));
+    ESP_LOGI("PY", "13");
     mp_obj_list_init(mp_sys_argv, 0);
+    ESP_LOGI("PY", "14");
     readline_init0();
+    ESP_LOGI("PY", "15");
 
     // initialise peripherals
     machine_pins_init();
 
+    ESP_LOGI("PY", "16");
+
     // run boot-up scripts
     pyexec_frozen_module("_boot.py");
+    ESP_LOGI("PY", "17");
     pyexec_file_if_exists("boot.py");
+    ESP_LOGI("PY", "18");
+
     if (pyexec_mode_kind == PYEXEC_MODE_FRIENDLY_REPL) {
         pyexec_file_if_exists("main.py");
     }
+
+    ESP_LOGI("PY", "19");
 
     for (;;) {
         if (pyexec_mode_kind == PYEXEC_MODE_RAW_REPL) {
