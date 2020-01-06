@@ -12,44 +12,19 @@ RPM = RPS/60.0
 
 class Servostep:
 
-    # MODE = {
-    #     'p': _servostep.MODE_POSITION_ABS,
-    #     'p_rel': _servostep.MODE_POSITION_REL,
-    #     'p_modulo': _servostep.MODE_POSITION_MODULO,
-    #     'v': _servostep.MODE_VELOCITY,
-    # }
-
-    # END_PROP = {
-    #     'time': _servostep.END_PROP_TIME,
-    #     'p': _servostep.END_PROP_POSITION_ABS,
-    #     'p_rel': _servostep.END_PROP_POSITION_REL,
-    #     #'p_modulo': _servostep.END_PROP_POSITION_MODULO,
-    #     'v': _servostep.END_PROP_VELOCITY,
-    #     't': _servostep.END_PROP_TORQUE,
-    # }
+    interactiveMode = True
 
 
-    def run(self, arg, wait=True):
-
-        ps.power_off()
-
-        if isinstance(arg, Scenario):
-            for cmd in arg:
-                self._push_cmd(cmd)
-        elif isinstance(arg, Command):
-            self._push_cmd(arg)
-        else:
-            raise ValueError
-
+    def run(self):
         ps.run()
-
-        if wait:
-            self._wait_empty_queue()
-        print("Run done")
-
+        self._wait_completion()
+        ps.power_off()
 
     def _push_cmd(self, cmd):
         print("Pushing %s" % cmd)
+
+        if self.interactiveMode:
+            ps.power_off()
 
         ps.push(
             mode=cmd.mode,
@@ -61,24 +36,32 @@ class Servostep:
             end_comp=cmd.end.comp if cmd.end else None,
             )
 
+        if self.interactiveMode:
+            ps.run()
+            self._wait_completion()
+            ps.power_off()
 
-    def _wait_empty_queue(self):
+
+    def _wait_completion(self):
         print("Waiting on queue")
-        time.sleep(3)
+        try:
+            while ps.is_running():
+                time.sleep(0.01)
+        except KeyboardInterrupt:
+            ps.power_off()
+            raise KeyboardInterrupt
         print("Done")
 
 
     def setPosition(self,
                     position=None,
-                    max_velocity=10.0*RPS,
+                    max_velocity=1.0*RPS,
                     max_torque=1.0,
                     until_absolute_error_lower_than=None,
                     until_absolute_error_greater_than=None,
                     until_error_lower_than=None,
                     until_error_greater_than=None,
                     ):
-
-        ps.power_off()
 
         end = None
         if until_absolute_error_lower_than is not None:
@@ -95,26 +78,30 @@ class Servostep:
         if position is None: position = 0.0
 
         cmd = Command(mode, position, max_velocity, max_torque, end=end)
-
         self._push_cmd(cmd)
-        ps.run()
         
-
+        
     def setSpeed(self,
-                 speed=None,
+                 velocity,
                  max_torque=1.0,
                  until_position_lower_than=None,
                  until_position_greater_than=None,):
-        pass
+        end = None
+        if until_position_lower_than is not None:
+            end = EndCondition(ps.END_PROP_POSITION_ABS, until_position_lower_than, ps.END_COMP_LT)
+        elif until_position_greater_than is not None:
+            end = EndCondition(ps.END_PROP_POSITION_ABS, until_position_greater_than, ps.END_COMP_GT)
+        
+        cmd = Command(ps.MODE_VELOCITY, None, velocity, max_torque, end=end)
+        self._push_cmd(cmd)
 
 
+# class Scenario(list):
+#     loop = 0
 
-class Scenario(list):
-    loop = 0
-
-    def __str__(self):
-        items = "\n".join([str(i) for i in self])
-        return "SCENARIO loop={} wait={}\n{}".format(self.loop, self.wait, items)
+#     def __str__(self):
+#         items = "\n".join([str(i) for i in self])
+#         return "SCENARIO loop={} wait={}\n{}".format(self.loop, self.wait, items)
     
 
 class Command:
@@ -126,7 +113,7 @@ class Command:
         self.v = float(v) if v is not None else None
         self.t = float(t) if t is not None else None
         self.end = end
-        assert(isinstance(self.end, EndCondition))
+        assert(isinstance(self.end, EndCondition) or end is None)
 
     def __repr__(self):
         return "[CMD mode={} p={} v={} t={} end={}]".format(self.mode, self.p, self.v, self.t, self.end)
@@ -150,17 +137,17 @@ class EndCondition:
 
 if __name__ == "__main__":
 
-    s1 = Scenario([
-            Command('p', 5, end=True),
-            Command('v', 50, end=EndCondition("position", 5, ">=")),
-         ])
+    # s1 = Scenario([
+    #         Command('p', 5, end=True),
+    #         Command('v', 50, end=EndCondition("position", 5, ">=")),
+    #      ])
 
-    s1.loop = 2
+    # s1.loop = 2
 
-    m = Servostep()
-    m.run(s1)
+    # m = Servostep()
+    # m.run(s1)
 
-    m.run(Scenario([Command('v', p=0, v=10, end=EndCondition("time", 0.1)),]))
+    # m.run(Scenario([Command('v', p=0, v=10, end=EndCondition("time", 0.1)),]))
 
 
 
@@ -174,7 +161,7 @@ if __name__ == "__main__":
     m = Servostep()
     while True:
 
-        #m.setInteractiveMode()
+        m.interactiveMode = True
         #m.setScenarioMode()
 
         # Go to idle position and wait it is reached within 0.5 degree
@@ -195,6 +182,7 @@ if __name__ == "__main__":
         m.setPosition(300*DEGREE, until_absolute_error_lower_than=0.5*DEGREE)
 
         m.runScenario()
+
 
 
 
