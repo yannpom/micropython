@@ -5,6 +5,7 @@ import socket
 import uwebsocket
 import websocket_helper
 import _thread
+import ujson
 
 from math import pi
 DEGREE = pi/180.0
@@ -36,16 +37,22 @@ class Servostep:
     def _thread_send_current_status_to_ws(self):
         while True:
             try:
+                time.sleep(0.1)
                 if self.data_websocket:
-                    self.data_websocket.write('{"p": %f}' % ps.get_position())
-                else:
-                    print("No WS to send data")
-                time.sleep(0.01)
+                    while True:
+                        log = ps.fetch_log()
+                        if log is None:
+                            break
+
+                        #self.data_websocket.write('{"t": %d, "cp": %f, "p": %f, "cv": %f, "v": %f}' % log)
+                        s = ujson.dumps(log)
+                        self.data_websocket.write(s)
+            except AttributeError:
+                print("WS disappeared")
             except OSError:
                 print("WS error during write")
             except KeyboardInterrupt:
                 print("KeyboardInterrupt ignored from thread")
-
 
 
     def _start_data_websocket(self):
@@ -78,7 +85,7 @@ class Servostep:
 
         self.data_socket_client = client
         websocket_helper.server_handshake(client)
-        self.data_websocket = uwebsocket.websocket(self.data_socket_client, True)
+        self.data_websocket = uwebsocket.websocket(self.data_socket_client)
         self.data_socket_client.setblocking(False)
 
 
@@ -154,23 +161,23 @@ class Servostep:
                  max_torque=1.0,
                  #max_acceleration=10.0,
                  until_position_lower_than=None,
-                 until_position_greater_than=None,):
+                 until_position_greater_than=None,
+                 until_timeout=None,
+                 ):
         end = None
         if until_position_lower_than is not None:
             end = EndCondition(ps.END_PROP_POSITION_ABS, until_position_lower_than, ps.END_COMP_LT)
         elif until_position_greater_than is not None:
             end = EndCondition(ps.END_PROP_POSITION_ABS, until_position_greater_than, ps.END_COMP_GT)
-        
+        elif until_timeout is not None:
+            end = EndCondition(ps.END_PROP_TIME, until_timeout, 0)
+
         cmd = Command(ps.MODE_VELOCITY, None, velocity, max_torque, end=end)
         self._push_cmd(cmd)
 
-
-# class Scenario(list):
-#     loop = 0
-
-#     def __str__(self):
-#         items = "\n".join([str(i) for i in self])
-#         return "SCENARIO loop={} wait={}\n{}".format(self.loop, self.wait, items)
+    def setTorque(self, t=0):
+        cmd = Command(ps.MODE_TORQUE, None, None, t)
+        self._push_cmd(cmd)
     
 
 class Command:
@@ -187,27 +194,18 @@ class Command:
     def __repr__(self):
         return "[CMD mode={} p={} v={} t={} end={}]".format(self.mode, self.p, self.v, self.t, self.end)
 
-#Command2('v', p=0, v=10, end=EndCondition("time", 1))
-
-
 class EndCondition:
     
     def __init__(self, prop, value, comp):
         self.prop = prop
         self.value = float(value)
         self.comp = comp
-        #assert(prop in ['time', 'position', 'speed', 'torque'])
-        #assert(comparison in ['<=', '>='])
-
+        
     def __repr__(self):
-        #return "[END: {0.prop} {0.comparison} {0.value}]".format(self)
         return "[END: {} {} {}]".format(self.prop, self.comp, self.value)
 
 
 if __name__ == "__main__":
-
-    
-
 
     from servostep import *
     import _servostep as ps
