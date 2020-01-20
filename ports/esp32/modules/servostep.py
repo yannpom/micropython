@@ -35,22 +35,21 @@ class Servostep:
 
 
     def _thread_send_current_status_to_ws(self):
+        print("Starting thread")
         while True:
             try:
                 time.sleep(0.1)
+                #print("loop1")
                 if self.data_websocket:
                     while True:
-                        log = ps.fetch_log()
+                        log = ps.fetch_log_binary()
                         if log is None:
                             break
-
-                        #self.data_websocket.write('{"t": %d, "cp": %f, "p": %f, "cv": %f, "v": %f}' % log)
-                        s = ujson.dumps(log)
-                        self.data_websocket.write(s)
+                        self.data_websocket.write(log)
             except AttributeError:
                 print("WS disappeared")
             except OSError:
-                print("WS error during write")
+               print("WS error during write")
             except KeyboardInterrupt:
                 print("KeyboardInterrupt ignored from thread")
 
@@ -84,8 +83,10 @@ class Servostep:
             self.data_socket_client = None
 
         self.data_socket_client = client
-        websocket_helper.server_handshake(client)
+        websocket_helper.server_handshake(client) # TODO can raise OSError: [Errno 104] ECONNRESET
         self.data_websocket = uwebsocket.websocket(self.data_socket_client)
+        # Set MP_STREAM_SET_DATA_OPTS to FRAME_BIN
+        self.data_websocket.ioctl(9,2)
         self.data_socket_client.setblocking(False)
 
 
