@@ -55,21 +55,17 @@ struct webrepl_file {
 } __attribute__((packed));
 
 enum { PUT_FILE = 1, GET_FILE, GET_VER };
-enum { STATE_PASSWD, STATE_NORMAL };
 
 typedef struct _mp_obj_webrepl_t {
     mp_obj_base_t base;
     mp_obj_t sock;
-    byte state;
     byte hdr_to_recv;
     uint32_t data_to_recv;
     struct webrepl_file hdr;
     mp_obj_t cur_file;
 } mp_obj_webrepl_t;
 
-STATIC const char passwd_prompt[] = "Password: ";
-STATIC const char connected_prompt[] = "\r\nWebREPL connected\r\n>>> ";
-STATIC const char denied_prompt[] = "\r\nAccess denied\r\n";
+STATIC const char connected_prompt[] = "\r\nPyStepper connected\r\n>>> ";
 
 STATIC char webrepl_passwd[10];
 
@@ -102,8 +98,7 @@ STATIC mp_obj_t webrepl_make_new(const mp_obj_type_t *type, size_t n_args, size_
     o->sock = args[0];
     o->hdr_to_recv = sizeof(struct webrepl_file);
     o->data_to_recv = 0;
-    o->state = STATE_PASSWD;
-    write_webrepl_str(args[0], SSTR(passwd_prompt));
+    write_webrepl_str(args[0], SSTR(connected_prompt));
     return o;
 }
 
@@ -195,26 +190,6 @@ STATIC mp_uint_t _webrepl_read(mp_obj_t self_in, void *buf, mp_uint_t size, int 
         return out_sz;
     }
 
-    if (self->state == STATE_PASSWD) {
-        char c = *(char*)buf;
-        if (c == '\r' || c == '\n') {
-            self->hdr.fname[self->data_to_recv] = 0;
-            DEBUG_printf("webrepl: entered password: %s\n", self->hdr.fname);
-
-            if (strcmp(self->hdr.fname, webrepl_passwd) != 0) {
-                write_webrepl_str(self->sock, SSTR(denied_prompt));
-                return 0;
-            }
-
-            self->state = STATE_NORMAL;
-            self->data_to_recv = 0;
-            write_webrepl_str(self->sock, SSTR(connected_prompt));
-        } else if (self->data_to_recv < 10) {
-            self->hdr.fname[self->data_to_recv++] = c;
-        }
-        return -2;
-    }
-
     // If last read data belonged to text record (== REPL)
     int err;
     if (sock_stream->ioctl(self->sock, MP_STREAM_GET_DATA_OPTS, 0, &err) == 1) {
@@ -295,10 +270,6 @@ STATIC mp_uint_t _webrepl_read(mp_obj_t self_in, void *buf, mp_uint_t size, int 
 
 STATIC mp_uint_t webrepl_write(mp_obj_t self_in, const void *buf, mp_uint_t size, int *errcode) {
     mp_obj_webrepl_t *self = self_in;
-    if (self->state == STATE_PASSWD) {
-        // Don't forward output until passwd is entered
-        return size;
-    }
     const mp_stream_p_t *stream_p = mp_get_stream(self->sock);
     return stream_p->write(self->sock, buf, size, errcode);
 }
